@@ -22,7 +22,7 @@ curl -sSL https://raw.githubusercontent.com/ouut/webit/main/run.sh | bash
 
 > *Note: If your default repository branch is `master`, remember to change `main` to `master` in the URL.*
 
-Once fired up, open your browser and go to `http://localhost`. The default password is `cc3`.
+Once fired up, open your browser and go to `http://localhost`. The default password is `cc`.
 
 ---
 
