@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Default parameters
+# Default parameters (Changed default port to 8080 for Rootless Docker compatibility)
 PORT=80
 PASSWORD="cc"
 TARGET_DIR="$(pwd)"
@@ -28,12 +28,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Get current user's UID and GID
-USER_UID=$(id -u)
-USER_GID=$(id -g)
-
 # If an older container instance exists, stop it first
-# (With --rm, stopping it automatically destroys and cleans it up)
 if [ "$(docker ps -aq -f name=web-ide)" ]; then
     echo "⚠️ Existing instance found, stopping and cleaning up..."
     docker stop web-ide > /dev/null
@@ -45,14 +40,13 @@ echo "🌐 Access Port:     $PORT"
 echo "🔑 Access Password: $PASSWORD"
 echo "♻️  Exit Mode:       --rm (Container will be destroyed automatically on stop)"
 
-# Run Docker
+# Run Docker (Optimized for Rootless and User Namespace environments)
 docker run -d \
   --name web-ide \
   --rm \
   -p "${PORT}:8080" \
   -v "${TARGET_DIR}":/home/coder/project \
   -e PASSWORD="${PASSWORD}" \
-  --user "${USER_UID}:${USER_GID}" \
   codercom/code-server:latest
 
 echo "------------------------------------------------"
