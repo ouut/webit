@@ -45,22 +45,50 @@ curl -sSL https://raw.githubusercontent.com/ouut/webit/main/run.sh | bash -s -- 
 
 ---
 
+## 🖥️ Local Management (Download & Run)
+
+You can also download `run.sh` and use it as a local service manager:
+
+```bash
+# Download once
+curl -sSL https://raw.githubusercontent.com/ouut/webit/main/run.sh -o run.sh
+chmod +x run.sh
+
+# Service commands
+./run.sh start             # Start (default port 8080, password cc, current dir)
+./run.sh start --port 9090 --password 123456 --dir /path/to/project
+./run.sh stop              # Stop the container (data preserved)
+./run.sh restart           # Stop and re-create with new config
+./run.sh restart --port 9000
+./run.sh status            # Show container status
+./run.sh logs              # Tail container logs
+./run.sh remove            # Destroy container completely
+
+# Just run it without downloading
+./run.sh                   # Same as './run.sh start'
+```
+
+---
+
 ## 🛑 Stop and Resume
 
 The container is **persistent** — stopping it won't destroy your environment or config:
 
 ```bash
-# Stop (preserves everything)
-docker stop web-ide
+# Using the script (recommended)
+./run.sh stop
+./run.sh start             # Resume where you left off
 
-# Resume exactly where you left off
+# Or raw docker commands
+docker stop web-ide
 docker start web-ide
 ```
 
 To fully destroy the container and all its data:
 
 ```bash
-docker stop web-ide && docker rm web-ide
+./run.sh remove
+# or: docker stop web-ide && docker rm web-ide
 ```
 
 ---
