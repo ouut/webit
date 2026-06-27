@@ -83,6 +83,7 @@ cmd_start() {
         -p "${PORT}:8080" \
         -v "${TARGET_DIR}":/home/coder/project \
         -e "PASSWORD=${PASSWORD}" \
+	-e "CODE_SERVER_RECONNECTION_GRACE_TIME=2592000" \  # 👈 添加这行 (单位: 秒，这里设置为30天)
         "${IMAGE}" \
         --bind-addr 0.0.0.0:8080 /home/coder/project
 
