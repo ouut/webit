@@ -69,21 +69,30 @@ cmd_start() {
 
     detect_docker_user
 
+    # ── 最佳实践：在宿主机提前创建好持久化数据的子目录 ──
+    # 保证整个 /home/coder（包含 Claude Code、Codex、Codewhale 的配置/登录态/历史记录）永不丢失
+    local DATA_DIR="${TARGET_DIR}/.code-server-home"
+    mkdir -p "${DATA_DIR}"
+
     # Clean up any stopped container so we can recreate with fresh config
     docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
     echo "🚀 Starting lightweight Cloud IDE (code-server)..."
-    echo "📂 Shared Directory: ${TARGET_DIR}"
-    echo "🌐 Access Port:     ${PORT}"
-    echo "🔑 Access Password: ${PASSWORD}"
+    echo "📂 Workspace Root:    ${TARGET_DIR}"
+    echo "💾 Full Home Data:    ${DATA_DIR} -> /home/coder"
+    echo "🌐 Access Port:       ${PORT}"
+    echo "🔑 Access Password:   ${PASSWORD}"
 
+    # ── 嵌套挂载最佳实践 ──
+    # CODE_SERVER_RECONNECTION_GRACE_TIME=2592000 让会话保持 30 天永不断线保护
     docker run -d \
         --name "${CONTAINER_NAME}" \
         --user "${DOCKER_USER}" \
         -p "${PORT}:8080" \
+        -v "${DATA_DIR}":/home/coder \
         -v "${TARGET_DIR}":/home/coder/project \
         -e "PASSWORD=${PASSWORD}" \
-	-e "CODE_SERVER_RECONNECTION_GRACE_TIME=2592000" \  # 👈 添加这行 (单位: 秒，这里设置为30天)
+        -e "CODE_SERVER_RECONNECTION_GRACE_TIME=2592000" \
         "${IMAGE}" \
         --bind-addr 0.0.0.0:8080 /home/coder/project
 
@@ -158,11 +167,9 @@ case "${COMMAND}" in
     logs)    cmd_logs ;;
     -h|--help|help) usage ;;
     "")
-        # No command — default to start (covers both pipe mode and bare ./run.sh)
         cmd_start
         ;;
     --*)
-        # First argument looks like an option — treat as start with flags
         cmd_start "$@"
         ;;
     *)
