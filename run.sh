@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-CONTAINER_NAME="web-ide"
 IMAGE="codercom/code-server:latest"
 
 # ── Defaults (used by start/restart) ──────────────────────────
@@ -9,21 +8,91 @@ PORT=8080
 PASSWORD="cc"
 TARGET_DIR="$(pwd)"
 
+# ── Container naming ──────────────────────────────────────────
+# Derive a unique container name from the project directory path.
+# e.g. /home/user/my-project  →  webit-my-project
+#      /                      →  webit-root
+#      /home/user/my project  →  webit-my-project
+sanitize_name() {
+    local raw="${1##*/}"                     # basename
+    raw="${raw:-root}"                       # "/" → "root"
+    echo "webit-${raw}" \
+        | sed 's/[^a-zA-Z0-9_.-]/-/g' \
+        | sed 's/--*/-/g' \
+        | sed 's/^-//;s/-$//'
+}
+
+CONTAINER_NAME="$(sanitize_name "${TARGET_DIR}")"
+
 # ── Helpers ───────────────────────────────────────────────────
 
 usage() {
-    echo "Usage:"
-    echo "  ./run.sh start    [--port PORT] [--password PASSWORD] [--dir DIR_PATH]"
-    echo "  ./run.sh stop"
-    echo "  ./run.sh restart  [--port PORT] [--password PASSWORD] [--dir DIR_PATH]"
-    echo "  ./run.sh remove"
-    echo "  ./run.sh status"
-    echo "  ./run.sh logs"
-    echo ""
-    echo "  # Pipe / curl mode:"
-    echo "  curl -sSL ... | bash"
-    echo "  curl -sSL ... | bash -s -- [--port PORT] [--password PASSWORD] [--dir DIR_PATH]"
-    exit 1
+    cat <<'HELP'
+Webit — One-command browser VS Code (code-server)
+==================================================
+
+🚀 Command reference
+──────────────────────────────────────────────────
+  ./run.sh start    Start container (default: port 8080, password cc, pwd)
+  ./run.sh stop     Stop container (preserves all data)
+  ./run.sh restart  Stop then recreate (accepts new options)
+  ./run.sh remove   Destroy container permanently
+  ./run.sh status   Show container status
+  ./run.sh logs     Tail container logs in real time
+  ./run.sh help     Show this help
+
+📋 Start / restart options
+──────────────────────────────────────────────────
+  --port PORT           Listen port (default: 8080)
+  --password PASSWORD   Login password (default: cc)
+  --dir DIR_PATH        Project directory to share (absolute path, default: pwd)
+
+💡 Examples
+──────────────────────────────────────────────────
+  # Quick start (defaults)
+  ./run.sh start
+
+  # Custom port, password & directory
+  ./run.sh start --port 9090 --password 123456 --dir /home/user/my-project
+
+  # Stop & resume
+  ./run.sh stop
+  ./run.sh start          # extensions, settings, sessions all preserved
+
+  # Change port on the fly
+  ./run.sh restart --port 9000
+
+  # Check status / logs
+  ./run.sh status
+  ./run.sh logs
+
+🌐 Remote one-liner (curl pipe)
+──────────────────────────────────────────────────
+  curl -sSL https://raw.githubusercontent.com/ouut/webit/main/run.sh | bash
+
+  # With options
+  curl -sSL ... | bash -s -- --port 9090 --password 123456 --dir /home/user/project
+
+🔧 Container naming
+──────────────────────────────────────────────────
+  Name = webit-<dirname>
+  e.g. /home/user/my-app  →  container name webit-my-app
+  Run multiple instances side-by-side in different directories.
+
+💾 Data persistence
+──────────────────────────────────────────────────
+  All code-server user data (extensions, config, cache, sessions)
+  lives in .code-server-home/ inside your project directory.
+  Container removal does not delete it; rebuild restores everything.
+
+  ⚠️  Add .code-server-home to your .gitignore
+
+🛡️ Permission safety
+──────────────────────────────────────────────────
+  Automatically detects root vs. rootless Docker and maps users so
+  files created inside the container belong to you — never to root.
+HELP
+    exit 0
 }
 
 detect_docker_user() {
@@ -57,6 +126,9 @@ cmd_start() {
         esac
     done
 
+    # Recompute container name in case --dir changed the target
+    CONTAINER_NAME="$(sanitize_name "${TARGET_DIR}")"
+
     # If already running, just report
     if container_running; then
         local HOST_PORT
@@ -69,8 +141,8 @@ cmd_start() {
 
     detect_docker_user
 
-    # ── 最佳实践：在宿主机提前创建好持久化数据的子目录 ──
-    # 保证整个 /home/coder（包含 Claude Code、Codex、Codewhale 的配置/登录态/历史记录）永不丢失
+    # Create persistent data directory on the host so /home/coder
+    # (extensions, configs, sessions) survives container removal.
     local DATA_DIR="${TARGET_DIR}/.code-server-home"
     mkdir -p "${DATA_DIR}"
 
@@ -83,8 +155,8 @@ cmd_start() {
     echo "🌐 Access Port:       ${PORT}"
     echo "🔑 Access Password:   ${PASSWORD}"
 
-    # ── 嵌套挂载最佳实践 ──
-    # CODE_SERVER_RECONNECTION_GRACE_TIME=2592000 让会话保持 30 天永不断线保护
+    # Nested mount: entire /home/coder is persisted, project is a sub-mount.
+    # CODE_SERVER_RECONNECTION_GRACE_TIME=2592000 keeps sessions alive for 30 days.
     docker run -d \
         --name "${CONTAINER_NAME}" \
         --user "${DOCKER_USER}" \
