@@ -81,7 +81,7 @@ Webit — One-command browser VS Code (code-server)
 
 💾 Data persistence
 ──────────────────────────────────────────────────
-  All code-server user data (extensions, config, cache, sessions)
+  All code-server user data   (extensions, config, cache, sessions, /root home)
   lives in .code-server-home/ inside your project directory.
   Container removal does not delete it; rebuild restores everything.
 
@@ -141,10 +141,11 @@ cmd_start() {
 
     detect_docker_user
 
-    # Create persistent data directory on the host so /home/coder
-    # (extensions, configs, sessions) survives container removal.
+    # Create persistent data directories on the host.
+    # /home/coder and /root both survive container removal, so tools
+    # that write to /root (e.g. Codewhale) don't lose state.
     local DATA_DIR="${TARGET_DIR}/.code-server-home"
-    mkdir -p "${DATA_DIR}"
+    mkdir -p "${DATA_DIR}" "${DATA_DIR}/root-home"
 
     # Clean up any stopped container so we can recreate with fresh config
     docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
@@ -152,6 +153,7 @@ cmd_start() {
     echo "🚀 Starting lightweight Cloud IDE (code-server)..."
     echo "📂 Workspace Root:    ${TARGET_DIR}"
     echo "💾 Full Home Data:    ${DATA_DIR} -> /home/coder"
+    echo "👤 Root Home Data:    ${DATA_DIR}/root-home -> /root"
     echo "🌐 Access Port:       ${PORT}"
     echo "🔑 Access Password:   ${PASSWORD}"
 
@@ -162,6 +164,7 @@ cmd_start() {
         --user "${DOCKER_USER}" \
         -p "${PORT}:8080" \
         -v "${DATA_DIR}":/home/coder \
+        -v "${DATA_DIR}/root-home":/root \
         -v "${TARGET_DIR}":/home/coder/project \
         -e "PASSWORD=${PASSWORD}" \
         -e "CODE_SERVER_RECONNECTION_GRACE_TIME=2592000" \
