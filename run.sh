@@ -91,6 +91,17 @@ Webit — One-command browser VS Code (code-server)
 ──────────────────────────────────────────────────
   Automatically detects root vs. rootless Docker and maps users so
   files created inside the container belong to you — never to root.
+
+🔄 Anti-exit (linger + restart)
+──────────────────────────────────────────────────
+  Rootless Docker runs inside your systemd user session.  Closing the
+  terminal would normally SIGTERM the container → Exit 143.
+
+  This script fixes it two ways:
+  1. Automatically runs `loginctl enable-linger` so your session
+     persists after the terminal closes.
+  2. Adds `--restart unless-stopped` so the container auto-recovers
+     even if SIGTERM slips through.
 HELP
     exit 0
 }
@@ -102,6 +113,27 @@ detect_docker_user() {
     else
         DOCKER_USER="$(id -u):$(id -g)"
         echo "🐳 Docker mode: root (auto-detected)"
+    fi
+}
+
+# Enable lingering so systemd won't kill the Docker daemon (and thus
+# containers) when the user's terminal / SSH session ends.  Without
+# this, closing the terminal sends SIGTERM → container exits with 143.
+# Rootless Docker is especially vulnerable because the daemon runs
+# inside the user's systemd session slice.
+ensure_linger() {
+    if command -v loginctl &>/dev/null; then
+        local LINGER
+        LINGER=$(loginctl show-user "$(whoami)" --property=Linger 2>/dev/null | cut -d= -f2)
+        if [[ "${LINGER}" != "yes" ]]; then
+            loginctl enable-linger 2>/dev/null || true
+            if loginctl show-user "$(whoami)" --property=Linger 2>/dev/null | grep -q '=yes'; then
+                echo "🔒 Enabled linger for user $(whoami) — containers survive terminal close"
+            else
+                echo "⚠️  Unable to enable linger. Close terminal → container may exit (143)."
+                echo "   Run manually:  loginctl enable-linger"
+            fi
+        fi
     fi
 }
 
@@ -140,6 +172,7 @@ cmd_start() {
     fi
 
     detect_docker_user
+    ensure_linger
 
     # Create persistent data directories on the host.
     # /home/coder and /root both survive container removal, so tools
@@ -162,6 +195,7 @@ cmd_start() {
     docker run -d \
         --name "${CONTAINER_NAME}" \
         --user "${DOCKER_USER}" \
+        --restart unless-stopped \
         -p "${PORT}:8080" \
         -v "${DATA_DIR}":/home/coder \
         -v "${DATA_DIR}/root-home":/root \
