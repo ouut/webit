@@ -122,7 +122,7 @@ detect_docker_user() {
 # Rootless Docker is especially vulnerable because the daemon runs
 # inside the user's systemd session slice.
 ensure_linger() {
-    if command -v loginctl &>/dev/null; then
+    if command -v loginctl >/dev/null 2>&1; then
         local LINGER
         LINGER=$(loginctl show-user "$(whoami)" --property=Linger 2>/dev/null | cut -d= -f2)
         if [[ "${LINGER}" != "yes" ]]; then
